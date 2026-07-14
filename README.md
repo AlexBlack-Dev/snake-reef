@@ -1,4 +1,4 @@
-﻿# Snake Reef
+# Snake Reef
 
 ![preview](images/preview.svg)
 
