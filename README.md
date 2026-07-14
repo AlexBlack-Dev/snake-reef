@@ -1,4 +1,4 @@
-﻿# Snake Reef
+# Snake Reef
 
 ![preview](images/preview.svg)
 
@@ -8,9 +8,9 @@ A canvas-based snake game with obstacles, glowing food orbs, and a dark reef the
 
 Open index.html in a browser.
 
-`ash
+```bash
 npx serve .
-`
+```
 
 ## Features
 
@@ -24,8 +24,8 @@ npx serve .
 
 - Vanilla JavaScript
 - Canvas 2D API
-- No dependencies â€” single HTML file
+- No dependencies - single HTML file
 
 ## License
 
-MIT Â© [Alex Black](https://github.com/AlexBlack-Dev)
+MIT (c) [Alex Black](https://github.com/AlexBlack-Dev)
