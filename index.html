@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Snake Reef</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #08080f; overflow: hidden; font-family: system-ui, sans-serif; color: #fff; }
+canvas { display: block; margin: 0 auto; }
+#ui {
+  position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 32px; align-items: center; font-size: 14px;
+  color: rgba(255,255,255,0.5); letter-spacing: 0.5px; z-index: 10;
+}
+#ui span { color: #5B9BFF; font-weight: 600; }
+#overlay {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; z-index: 20;
+  background: rgba(8,8,15,0.75); backdrop-filter: blur(4px);
+  transition: opacity 0.4s;
+}
+#overlay.hidden { opacity: 0; pointer-events: none; }
+#overlay h1 { font-size: 2.5rem; font-weight: 700; color: #5B9BFF; }
+#overlay p { margin-top: 8px; color: rgba(255,255,255,0.4); font-size: 14px; }
+#overlay button {
+  margin-top: 24px; padding: 10px 32px; border-radius: 999px;
+  border: 1px solid rgba(91,155,255,0.3); background: transparent;
+  color: #5B9BFF; font-size: 15px; cursor: pointer;
+  transition: all 0.3s;
+}
+#overlay button:hover { background: rgba(91,155,255,0.15); border-color: #5B9BFF; }
+</style>
+</head>
+<body>
+<div id="overlay">
+  <h1>Snake Reef</h1>
+  <p>arrows to move &middot; eat orbs &middot; avoid rocks &middot; don't crash</p>
+  <button id="startBtn">Play</button>
+</div>
+<div id="ui"><span id="score">0</span> score &nbsp;&middot;&nbsp; <span id="high">0</span> best</div>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c')
+const ctx = canvas.getContext('2d')
+const scoreEl = document.getElementById('score')
+const highEl = document.getElementById('high')
+const overlay = document.getElementById('overlay')
+const startBtn = document.getElementById('startBtn')
+
+const SIZE = 20
+let cols, rows
+let snake, food, rocks, dir, nextDir, score, high, running, animId
+
+function resize() {
+  const w = Math.min(window.innerWidth, 520)
+  const h = Math.min(window.innerHeight - 80, 600)
+  const cellSize = Math.floor(Math.min(w, h) / SIZE)
+  cols = SIZE
+  rows = Math.floor(h / cellSize)
+  canvas.width = cellSize * cols
+  canvas.height = cellSize * rows
+}
+resize()
+window.addEventListener('resize', resize)
+
+function init() {
+  const mid = { x: Math.floor(cols / 2), y: Math.floor(rows / 2) }
+  snake = [
+    { x: mid.x, y: mid.y },
+    { x: mid.x - 1, y: mid.y },
+    { x: mid.x - 2, y: mid.y },
+  ]
+  dir = { x: 1, y: 0 }
+  nextDir = { x: 1, y: 0 }
+  score = 0
+  scoreEl.textContent = '0'
+  rocks = generateRocks()
+  spawnFood()
+}
+
+function generateRocks() {
+  const r = []
+  const count = Math.floor(cols * rows * 0.06)
+  for (let i = 0; i < count; i++) {
+    let pos
+    do {
+      pos = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) }
+    } while (
+      (Math.abs(pos.x - snake[0].x) < 4 && Math.abs(pos.y - snake[0].y) < 4) ||
+      r.some(p => p.x === pos.x && p.y === pos.y)
+    )
+    r.push(pos)
+  }
+  return r
+}
+
+function spawnFood() {
+  let pos
+  do {
+    pos = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) }
+  } while (
+    snake.some(s => s.x === pos.x && s.y === pos.y) ||
+    rocks.some(r => r.x === pos.x && r.y === pos.y)
+  )
+  food = pos
+}
+
+function tick() {
+  dir = { ...nextDir }
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y }
+
+  if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) { gameOver(); return }
+  if (snake.some(s => s.x === head.x && s.y === head.y)) { gameOver(); return }
+  if (rocks.some(r => r.x === head.x && r.y === head.y)) { gameOver(); return }
+
+  snake.unshift(head)
+
+  if (head.x === food.x && head.y === food.y) {
+    score++
+    scoreEl.textContent = score
+    spawnFood()
+  } else {
+    snake.pop()
+  }
+}
+
+function gameOver() {
+  running = false
+  cancelAnimationFrame(animId)
+  high = Math.max(score, high)
+  highEl.textContent = high
+  overlay.classList.remove('hidden')
+  startBtn.textContent = 'Restart'
+  draw()
+}
+
+const rockColors = ['#1a1a2e', '#16213e', '#0f3460']
+const sandColors = ['#0d1117', '#0f1419', '#0b0e14']
+
+function draw() {
+  const cellW = canvas.width / cols
+  const cellH = canvas.height / rows
+
+  ctx.fillStyle = '#08080f'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  for (const r of rocks) {
+    ctx.fillStyle = rockColors[Math.floor(Math.random() * rockColors.length)]
+    const pad = 1
+    const rx = r.x * cellW + pad
+    const ry = r.y * cellH + pad
+    ctx.beginPath()
+    ctx.roundRect(rx, ry, cellW - pad * 2, cellH - pad * 2, 3)
+    ctx.fill()
+  }
+
+  for (let i = 0; i < snake.length; i++) {
+    const s = snake[i]
+    const t = i / snake.length
+    const gradient = ctx.createRadialGradient(
+      s.x * cellW + cellW / 2, s.y * cellH + cellH / 2, 0,
+      s.x * cellW + cellW / 2, s.y * cellH + cellH / 2, cellW * 0.7
+    )
+    const hue = 220 - t * 30
+    gradient.addColorStop(0, `hsl(${hue}, 80%, ${65 - t * 20}%)`)
+    gradient.addColorStop(1, `hsl(${hue}, 70%, ${40 - t * 15}%)`)
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.roundRect(s.x * cellW + 1, s.y * cellH + 1, cellW - 2, cellH - 2, 4)
+    ctx.fill()
+  }
+
+  ctx.fillStyle = '#5B9BFF'
+  ctx.shadowColor = '#5B9BFF'
+  ctx.shadowBlur = 12
+  ctx.beginPath()
+  ctx.arc(
+    food.x * cellW + cellW / 2,
+    food.y * cellH + cellH / 2,
+    cellW * 0.3,
+    0, Math.PI * 2
+  )
+  ctx.fill()
+  ctx.shadowBlur = 0
+}
+
+function loop() {
+  tick()
+  draw()
+  if (running) animId = requestAnimationFrame(loop)
+}
+
+function start() {
+  overlay.classList.add('hidden')
+  resize()
+  init()
+  running = true
+  loop()
+}
+
+document.addEventListener('keydown', e => {
+  if (!running) return
+  switch (e.key) {
+    case 'ArrowUp': if (dir.y !== 1) nextDir = { x: 0, y: -1 }; break
+    case 'ArrowDown': if (dir.y !== -1) nextDir = { x: 0, y: 1 }; break
+    case 'ArrowLeft': if (dir.x !== 1) nextDir = { x: -1, y: 0 }; break
+    case 'ArrowRight': if (dir.x !== -1) nextDir = { x: 1, y: 0 }; break
+  }
+})
+
+startBtn.addEventListener('click', start)
+
+init()
+draw()
+</script>
+</body>
+</html>
