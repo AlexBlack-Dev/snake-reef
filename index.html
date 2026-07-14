@@ -35,7 +35,7 @@ canvas { display: block; margin: 0 auto; }
 <body>
 <div id="overlay">
   <h1>Snake Reef</h1>
-  <p>arrows to move &middot; eat orbs &middot; avoid rocks &middot; don't crash</p>
+  <p>arrows/WASD to move &middot; Space/Enter to start &middot; eat orbs &middot; avoid rocks</p>
   <button id="startBtn">Play</button>
 </div>
 <div id="ui"><span id="score">0</span> score &nbsp;&middot;&nbsp; <span id="high">0</span> best</div>
@@ -49,8 +49,10 @@ const overlay = document.getElementById('overlay')
 const startBtn = document.getElementById('startBtn')
 
 const SIZE = 20
+const TICK_MS = 150
+const ROCK_COLORS = ['#1a1a2e', '#16213e', '#0f3460']
 let cols, rows
-let snake, food, rocks, dir, nextDir, score, high, running, animId
+let snake, food, rocks, dir, nextDir, score, high, running, animId, lastTick
 
 function resize() {
   const w = Math.min(window.innerWidth, 520)
@@ -77,6 +79,7 @@ function init() {
   scoreEl.textContent = '0'
   rocks = generateRocks()
   spawnFood()
+  lastTick = 0
 }
 
 function generateRocks() {
@@ -90,7 +93,7 @@ function generateRocks() {
       (Math.abs(pos.x - snake[0].x) < 4 && Math.abs(pos.y - snake[0].y) < 4) ||
       r.some(p => p.x === pos.x && p.y === pos.y)
     )
-    r.push(pos)
+    r.push({ pos, color: ROCK_COLORS[Math.floor(Math.random() * ROCK_COLORS.length)] })
   }
   return r
 }
@@ -101,7 +104,7 @@ function spawnFood() {
     pos = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) }
   } while (
     snake.some(s => s.x === pos.x && s.y === pos.y) ||
-    rocks.some(r => r.x === pos.x && r.y === pos.y)
+    rocks.some(r => r.pos.x === pos.x && r.pos.y === pos.y)
   )
   food = pos
 }
@@ -109,13 +112,10 @@ function spawnFood() {
 function tick() {
   dir = { ...nextDir }
   const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y }
-
   if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) { gameOver(); return }
   if (snake.some(s => s.x === head.x && s.y === head.y)) { gameOver(); return }
-  if (rocks.some(r => r.x === head.x && r.y === head.y)) { gameOver(); return }
-
+  if (rocks.some(r => r.pos.x === head.x && r.pos.y === head.y)) { gameOver(); return }
   snake.unshift(head)
-
   if (head.x === food.x && head.y === food.y) {
     score++
     scoreEl.textContent = score
@@ -135,60 +135,43 @@ function gameOver() {
   draw()
 }
 
-const rockColors = ['#1a1a2e', '#16213e', '#0f3460']
-const sandColors = ['#0d1117', '#0f1419', '#0b0e14']
-
 function draw() {
   const cellW = canvas.width / cols
   const cellH = canvas.height / rows
-
   ctx.fillStyle = '#08080f'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
-
   for (const r of rocks) {
-    ctx.fillStyle = rockColors[Math.floor(Math.random() * rockColors.length)]
-    const pad = 1
-    const rx = r.x * cellW + pad
-    const ry = r.y * cellH + pad
+    ctx.fillStyle = r.color
     ctx.beginPath()
-    ctx.roundRect(rx, ry, cellW - pad * 2, cellH - pad * 2, 3)
+    ctx.roundRect(r.pos.x * cellW + 1, r.pos.y * cellH + 1, cellW - 2, cellH - 2, 3)
     ctx.fill()
   }
-
   for (let i = 0; i < snake.length; i++) {
     const s = snake[i]
     const t = i / snake.length
-    const gradient = ctx.createRadialGradient(
-      s.x * cellW + cellW / 2, s.y * cellH + cellH / 2, 0,
-      s.x * cellW + cellW / 2, s.y * cellH + cellH / 2, cellW * 0.7
-    )
     const hue = 220 - t * 30
-    gradient.addColorStop(0, `hsl(${hue}, 80%, ${65 - t * 20}%)`)
-    gradient.addColorStop(1, `hsl(${hue}, 70%, ${40 - t * 15}%)`)
-    ctx.fillStyle = gradient
+    ctx.fillStyle = `hsl(${hue}, 80%, ${65 - t * 20}%)`
     ctx.beginPath()
     ctx.roundRect(s.x * cellW + 1, s.y * cellH + 1, cellW - 2, cellH - 2, 4)
     ctx.fill()
   }
-
   ctx.fillStyle = '#5B9BFF'
   ctx.shadowColor = '#5B9BFF'
   ctx.shadowBlur = 12
   ctx.beginPath()
-  ctx.arc(
-    food.x * cellW + cellW / 2,
-    food.y * cellH + cellH / 2,
-    cellW * 0.3,
-    0, Math.PI * 2
-  )
+  ctx.arc(food.x * cellW + cellW / 2, food.y * cellH + cellH / 2, cellW * 0.3, 0, Math.PI * 2)
   ctx.fill()
   ctx.shadowBlur = 0
 }
 
-function loop() {
-  tick()
+function loop(ts) {
+  if (!running) return
+  if (ts - lastTick >= TICK_MS) {
+    tick()
+    lastTick = ts
+  }
   draw()
-  if (running) animId = requestAnimationFrame(loop)
+  animId = requestAnimationFrame(loop)
 }
 
 function start() {
@@ -196,21 +179,24 @@ function start() {
   resize()
   init()
   running = true
-  loop()
+  animId = requestAnimationFrame(loop)
 }
 
 document.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault()
+    if (!running) { start(); return; }
+  }
   if (!running) return
   switch (e.key) {
-    case 'ArrowUp': if (dir.y !== 1) nextDir = { x: 0, y: -1 }; break
-    case 'ArrowDown': if (dir.y !== -1) nextDir = { x: 0, y: 1 }; break
-    case 'ArrowLeft': if (dir.x !== 1) nextDir = { x: -1, y: 0 }; break
-    case 'ArrowRight': if (dir.x !== -1) nextDir = { x: 1, y: 0 }; break
+    case 'ArrowUp': case 'w': case 'W': if (dir.y !== 1) nextDir = { x: 0, y: -1 }; break
+    case 'ArrowDown': case 's': case 'S': if (dir.y !== -1) nextDir = { x: 0, y: 1 }; break
+    case 'ArrowLeft': case 'a': case 'A': if (dir.x !== 1) nextDir = { x: -1, y: 0 }; break
+    case 'ArrowRight': case 'd': case 'D': if (dir.x !== -1) nextDir = { x: 1, y: 0 }; break
   }
 })
 
 startBtn.addEventListener('click', start)
-
 init()
 draw()
 </script>
